@@ -1,0 +1,266 @@
+import java.io.*;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.*;
+
+public class ExpenseTracker {
+
+    private static final String FILE_PATH = "expenses.dat";
+    private static final Scanner scanner = new Scanner(System.in);
+    private static Map<String, User> users = new HashMap<>();
+    private static User currentUser = null;
+    private static List<Expense> expenses = new ArrayList<>();
+    private static Map<String, Double> categorySums = new HashMap<>();
+
+    public static void main(String[] args) {
+        loadUserData();
+        loadExpenses();
+
+        while (true) {
+            if (currentUser == null) {
+                System.out.println("1. Register");
+                System.out.println("2. Login");
+                System.out.println("3. Exit");
+                System.out.print("Select an option: ");
+                int choice = scanner.nextInt();
+                scanner.nextLine(); 
+
+                switch (choice) {
+                    case 1:
+                        register();
+                        break;
+                    case 2:
+                        login();
+                        break;
+                    case 3:
+                        saveUserData();
+                        saveExpenses();
+                        System.out.println("Goodbye!");
+                        return;
+                    default:
+                        System.out.println("Invalid choice. Try again.");
+                }
+            } else {
+                System.out.println("1. Add Expense");
+                System.out.println("2. View Expenses");
+                System.out.println("3. View Category-wise Summation");
+                System.out.println("4. Logout");
+                System.out.print("Select an option: ");
+                int choice = scanner.nextInt();
+                scanner.nextLine(); 
+
+                switch (choice) {
+                    case 1:
+                        addExpense();
+                        break;
+                    case 2:
+                        viewExpenses();
+                        break;
+                    case 3:
+                        viewCategorySummation();
+                        break;
+                    case 4:
+                        currentUser = null;
+                        System.out.println("Logged out successfully.");
+                        break;
+                    default:
+                        System.out.println("Invalid choice. Try again.");
+                }
+            }
+        }
+    }
+
+    private static void register() {
+        System.out.print("Enter username: ");
+        String username = scanner.nextLine();
+        System.out.print("Enter password: ");
+        String password = scanner.nextLine();
+        
+        if (users.containsKey(username)) {
+            System.out.println("Username already exists.");
+            return;
+        }
+        users.put(username, new User(username, password));
+        System.out.println("Registration successful.");
+    }
+
+    private static void login() {
+        System.out.print("Enter username: ");
+        String username = scanner.nextLine();
+        System.out.print("Enter password: ");
+        String password = scanner.nextLine();
+        
+        User user = users.get(username);
+        if (user != null && user.getPassword().equals(password)) {
+            currentUser = user;
+            System.out.println("Login successful.");
+        } else {
+            System.out.println("Invalid username or password.");
+        }
+    }
+
+    private static void addExpense() {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        try {
+            System.out.print("Enter date (yyyy-MM-dd): ");
+            Date date = sdf.parse(scanner.nextLine());
+            System.out.print("Enter category: ");
+            String category = scanner.nextLine();
+            System.out.print("Enter amount: ");
+            double amount = scanner.nextDouble();
+            scanner.nextLine(); 
+
+            Expense expense = new Expense(date, category, amount);
+            expenses.add(expense);
+            updateCategorySum(category, amount);
+
+            System.out.println("Expense added successfully.");
+        } catch (ParseException e) {
+            System.out.println("Invalid date format.");
+        }
+    }
+
+    private static void viewExpenses() {
+        if (expenses.isEmpty()) {
+            System.out.println("No expenses recorded.");
+            return;
+        }
+
+        System.out.println("Sort by:");
+        System.out.println("1. Date");
+        System.out.println("2. Category");
+        System.out.println("3. Amount");
+        System.out.print("Select an option: ");
+        int choice = scanner.nextInt();
+        scanner.nextLine(); // Consume newline
+
+        switch (choice) {
+            case 1:
+                expenses.sort(Comparator.comparing(Expense::getDate));
+                break;
+            case 2:
+                expenses.sort(Comparator.comparing(Expense::getCategory));
+                break;
+            case 3:
+                expenses.sort(Comparator.comparingDouble(Expense::getAmount));
+                break;
+            default:
+                System.out.println("Invalid choice. Showing unsorted list.");
+                break;
+        }
+
+        for (Expense expense : expenses) {
+            System.out.println(expense);
+        }
+    }
+
+    private static void viewCategorySummation() {
+        if (categorySums.isEmpty()) {
+            System.out.println("No expenses recorded.");
+            return;
+        }
+
+        for (Map.Entry<String, Double> entry : categorySums.entrySet()) {
+            System.out.println("Category: " + entry.getKey() + ", Total Amount: " + entry.getValue());
+        }
+    }
+
+    private static void updateCategorySum(String category, double amount) {
+        categorySums.put(category, categorySums.getOrDefault(category, 0.0) + amount);
+    }
+
+    private static void saveUserData() {
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("users.dat"))) {
+            oos.writeObject(users);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void loadUserData() {
+        File file = new File("users.dat");
+        if (file.exists()) {
+            try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream("users.dat"))) {
+                users = (Map<String, User>) ois.readObject();
+            } catch (IOException | ClassNotFoundException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private static void saveExpenses() {
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(FILE_PATH))) {
+            oos.writeObject(expenses);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void loadExpenses() {
+        File file = new File(FILE_PATH);
+        if (file.exists()) {
+            try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(FILE_PATH))) {
+                expenses = (List<Expense>) ois.readObject();
+                updateCategorySums();
+            } catch (IOException | ClassNotFoundException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private static void updateCategorySums() {
+        categorySums.clear();
+        for (Expense expense : expenses) {
+            updateCategorySum(expense.getCategory(), expense.getAmount());
+        }
+    }
+}
+
+class User implements Serializable {
+    private static final long serialVersionUID = 1L;
+    private String username;
+    private String password;
+
+    public User(String username, String password) {
+        this.username = username;
+        this.password = password;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+}
+
+class Expense implements Serializable {
+    private static final long serialVersionUID = 1L;
+    private Date date;
+    private String category;
+    private double amount;
+
+    public Expense(Date date, String category, double amount) {
+        this.date = date;
+        this.category = category;
+        this.amount = amount;
+    }
+
+    public Date getDate() {
+        return date;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public double getAmount() {
+        return amount;
+    }
+    public String toString() {
+        return "Date: " + date + ", Category: " + category + ", Amount: " + amount;
+    }
+}
+
+
